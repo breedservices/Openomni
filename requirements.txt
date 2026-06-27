@@ -1,0 +1,6 @@
+discord-py[speed]>=2.7.1
+fishr
+msgspec
+coloredlogs
+psutil
+urllib3

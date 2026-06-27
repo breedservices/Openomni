@@ -1,0 +1,24 @@
+[project]
+name = "openomni"
+version = "0.1.0"
+description = "openomni"
+readme = "README.md"
+requires-python = ">=3.11"
+dynamic = ["dependencies"]
+
+[tool.uv]
+no-project = true
+
+[tool.uv.sources]
+fishr = { path = "fishr" }
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = []
+packages = ["commands"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
