@@ -4,3 +4,4 @@ msgspec
 coloredlogs
 psutil
 urllib3
+ddgs

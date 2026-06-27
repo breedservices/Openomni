@@ -18,7 +18,17 @@ def _FormatElapsed(Ms: float) -> str:
     return f"{Ms:.0f}ms"
 
 
-class Grok(Cog):
+async def _Search(Query: str, MaxResults: int = 6) -> list[dict]:
+    from ddgs import DDGS
+    from fishr.Loop import asyncio
+
+    def _Run():
+        return DDGS().text(Query, max_results=MaxResults)
+
+    return await asyncio.to_thread(_Run)
+
+
+class Websearch(Cog):
     def __init__(self, Bot: "Bot") -> None:
         self.Bot = Bot
         self._Client = None
@@ -31,31 +41,46 @@ class Grok(Cog):
         return self._Client
 
     @command(
-        name="grok",
-        description="ask Grok a question",
+        name="websearch",
+        description="Search the web and get results",
     )
-    @describe(
-        prompt="Your message",
-        web_search="Enable web search",
-    )
-    async def GrokCommand(
+    @describe(query="What to search for")
+    async def WebsearchCommand(
         self,
         Interaction: interactions.Interaction,
-        prompt: str,
-        web_search: bool = False,
+        query: str,
     ) -> None:
         Start = monotonic()
         await Interaction.response.defer()
-        Client = await self._GetClient()
 
+        Results = await _Search(query)
+        if not Results:
+            await Interaction.followup.send(content="no results found")
+            return
+
+        Context = "\n\n".join(
+            f"**{R['title']}**\n{R['href']}\n{R['body']}" for R in Results
+        )
+        System = (
+            "You are a web search assistant. Using the provided search results, "
+            "write a clear, well-structured answer to the user's query. "
+            "Cite sources by including the URL inline where relevant. "
+            "Do not make up information not present in the results."
+        )
+        Client = await self._GetClient()
         Result = await Client.chat.completions.create(
-            model="noxus/grok-4.3",
-            messages=[{"role": "user", "content": prompt}],
-            web_search=web_search,
+            model="telnyx/glm-5.1",
+            messages=[
+                {"role": "system", "content": System},
+                {
+                    "role": "user",
+                    "content": f"Query: {query}\n\nSearch Results:\n{Context}",
+                },
+            ],
         )
         Content = Result.text
         if not Content:
-            await Interaction.followup.send(content="grok returned no response")
+            await Interaction.followup.send(content="websearch returned no response")
             return
 
         Elapsed = _FormatElapsed((monotonic() - Start) * 1000)
@@ -72,7 +97,7 @@ class Grok(Cog):
                     spacing=SeparatorSpacing.small,
                 ),
                 TextDisplay(
-                    content=f"Grok 4.3 • time taken {Elapsed} • invoked by {UserMention}"
+                    content=f"Websearch • time taken {Elapsed} • invoked by {UserMention}"
                 ),
                 accent_colour=Colour(randint(0, 0xFFFFFF)),
             )
@@ -82,4 +107,4 @@ class Grok(Cog):
 
 
 async def setup(Bot: "Bot") -> None:
-    await Bot.add_cog(Grok(Bot))
+    await Bot.add_cog(Websearch(Bot))

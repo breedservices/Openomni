@@ -32,7 +32,7 @@ class Qwen(Cog):
 
     @command(
         name="qwen",
-        description="Chat with Qwen",
+        description="ask Qwen a queston",
     )
     @describe(
         prompt="Your message",
