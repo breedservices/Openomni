@@ -12,6 +12,8 @@ from discord.ui import Container, LayoutView, Separator, TextDisplay
 if TYPE_CHECKING:
     from discord.ext.commands import Bot
 
+TtsMaxChars = 500
+
 TelnyxVoices = (
     "astra",
     "luna",
@@ -169,6 +171,13 @@ class Tts(Cog):
         mode: str = "file",
     ) -> None:
         Start = monotonic()
+
+        if len(prompt) > TtsMaxChars:
+            await Interaction.response.send_message(
+                content=f"Text too long (**{len(prompt)}** characters). Maximum is **{TtsMaxChars}** characters."
+            )
+            return
+
         await Interaction.response.defer()
         Client = await self._GetClient()
         Response = await Client.audio.speech.create(

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from base64 import b64encode
 from time import monotonic
 from typing import TYPE_CHECKING
 
-from discord import Colour, SeparatorSpacing, file, interactions
+from discord import Attachment, Colour, SeparatorSpacing, file, interactions
 from discord.app_commands import Choice, choices, command, describe
 from discord.ext.commands import Cog
 from discord.ui import Container, LayoutView, MediaGallery, Separator, TextDisplay
@@ -11,11 +12,24 @@ from discord.ui import Container, LayoutView, MediaGallery, Separator, TextDispl
 if TYPE_CHECKING:
     from discord.ext.commands import Bot
 
-ModelChoices = [
-    Choice(name="DeepAI", value="deepai/image"),
-    Choice(name="Raphael", value="raphael/image"),
-    Choice(name="Opera Aria", value="opera/aria"),
+AspectChoices = [
+    Choice(name="Auto", value="auto"),
+    Choice(name="Square (1:1)", value="1:1"),
+    Choice(name="Portrait (9:16)", value="9:16"),
+    Choice(name="Landscape (16:9)", value="16:9"),
 ]
+
+ResolutionChoices = [
+    Choice(name="1K", value="1k"),
+    Choice(name="2K", value="2k"),
+]
+
+MimeExt = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/jpg": "jpg",
+}
 
 
 def _FormatElapsed(Ms: float) -> str:
@@ -40,7 +54,7 @@ async def _FetchImage(Url: str) -> tuple[bytes, str]:
             return Data, Ext
 
 
-class Image(Cog):
+class Edit(Cog):
     def __init__(self, Bot: "Bot") -> None:
         self.Bot = Bot
         self._Client = None
@@ -52,50 +66,58 @@ class Image(Cog):
             self._Client = AsyncClient()
         return self._Client
 
-    async def _Generate(self, Client, Prompt: str, Model: str) -> str | None:
-        if Model == "opera/aria":
-            Result = await Client.opera.ask_async(f"Generate an image of: {Prompt}")
-            if Result.image_urls:
-                return Result.image_urls[0]
-            return None
-
-        Result = await Client.images.generate(
-            model=Model,
-            prompt=Prompt,
-        )
-        if Result.data and Result.data[0].url:
-            return Result.data[0].url
-        return None
-
     @command(
-        name="image",
-        description="Generate an image from text",
+        name="edit",
+        description="Edit an image using AI",
     )
-    @choices(model=ModelChoices)
+    @choices(aspect=AspectChoices, resolution=ResolutionChoices)
     @describe(
-        prompt="Image to generate",
-        model="Model to use",
+        prompt="How to edit the image",
+        image="Image to edit",
+        aspect="Output aspect ratio",
+        resolution="Output resolution",
     )
-    async def ImageCommand(
+    async def EditCommand(
         self,
         Interaction: interactions.Interaction,
         prompt: str,
-        model: str = "deepai/image",
+        image: Attachment,
+        aspect: str = "auto",
+        resolution: str = "1k",
     ) -> None:
         Start = monotonic()
         await Interaction.response.defer()
-        Client = await self._GetClient()
 
-        Url = await self._Generate(Client, prompt, model)
-        if not Url:
-            await Interaction.followup.send(content="image generation failed")
+        ContentType = image.content_type or "image/png"
+        Mime = ContentType.split(";")[0].strip()
+        if Mime not in MimeExt:
+            await Interaction.followup.send(content="unsupported image format")
             return
 
-        Data, Ext = await _FetchImage(Url)
+        ImgData = await image.read()
+        Encoded = b64encode(ImgData).decode()
+
+        Client = await self._GetClient()
+        Result = await Client.images.generate(
+            model="raphael/image",
+            prompt=prompt,
+            image={
+                "mime_type": Mime,
+                "base64_data": Encoded,
+            },
+            aspect=aspect,
+            resolution=resolution,
+        )
+
+        if not Result.data or not Result.data[0].url:
+            await Interaction.followup.send(content="image edit failed")
+            return
+
+        Data, Ext = await _FetchImage(Result.data[0].url)
         from io import BytesIO
         from random import randint
 
-        Filename = f"image.{Ext}"
+        Filename = f"edited.{Ext}"
         ImageFile = file.File(BytesIO(Data), filename=Filename)
         Elapsed = _FormatElapsed((monotonic() - Start) * 1000)
         UserMention = Interaction.user.mention if Interaction.user else "Unknown"
@@ -103,13 +125,15 @@ class Image(Cog):
         View = LayoutView()
         View.add_item(
             Container(
-                TextDisplay(content=f"Prompt: {prompt}\nModel: {model}\n"),
+                TextDisplay(content=f"Prompt: {prompt}\n"),
                 MediaGallery().add_item(media=f"attachment://{Filename}"),
                 Separator(
                     visible=True,
                     spacing=SeparatorSpacing.small,
                 ),
-                TextDisplay(content=f"time taken {Elapsed} • invoked by {UserMention}"),
+                TextDisplay(
+                    content=f"Raphael • time taken {Elapsed} • invoked by {UserMention}"
+                ),
                 accent_colour=Colour(randint(0, 0xFFFFFF)),
             )
         )
@@ -118,4 +142,4 @@ class Image(Cog):
 
 
 async def setup(Bot: "Bot") -> None:
-    await Bot.add_cog(Image(Bot))
+    await Bot.add_cog(Edit(Bot))
