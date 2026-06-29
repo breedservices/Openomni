@@ -97,14 +97,6 @@ def _BuildContainer(
 class Tts(Cog):
     def __init__(self, Bot: "Bot") -> None:
         self.Bot = Bot
-        self._Client = None
-
-    async def _GetClient(self):
-        if self._Client is None:
-            from fishr import AsyncClient
-
-            self._Client = AsyncClient()
-        return self._Client
 
     async def _SendVoiceMsg(
         self,
@@ -179,7 +171,9 @@ class Tts(Cog):
             return
 
         await Interaction.response.defer()
-        Client = await self._GetClient()
+        from .shared import GetClient
+
+        Client = await GetClient()
         Response = await Client.audio.speech.create(
             model=f"telnyx-tts/{voice}",
             input=prompt,

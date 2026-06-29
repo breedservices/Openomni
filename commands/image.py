@@ -25,32 +25,24 @@ def _FormatElapsed(Ms: float) -> str:
 
 
 async def _FetchImage(Url: str) -> tuple[bytes, str]:
-    import aiohttp
-
     ExtMap = {
         "image/png": "png",
         "image/jpeg": "jpg",
         "image/webp": "webp",
     }
-    async with aiohttp.ClientSession() as Session:
-        async with Session.get(Url) as Resp:
-            Data = await Resp.read()
-            ContentType = Resp.headers.get("Content-Type", "image/png")
-            Ext = ExtMap.get(ContentType, "png")
-            return Data, Ext
+    from .shared import GetSession
+
+    Session = await GetSession()
+    async with Session.get(Url) as Resp:
+        Data = await Resp.read()
+        ContentType = Resp.headers.get("Content-Type", "image/png")
+        Ext = ExtMap.get(ContentType, "png")
+        return Data, Ext
 
 
 class Image(Cog):
     def __init__(self, Bot: "Bot") -> None:
         self.Bot = Bot
-        self._Client = None
-
-    async def _GetClient(self):
-        if self._Client is None:
-            from fishr import AsyncClient
-
-            self._Client = AsyncClient()
-        return self._Client
 
     async def _Generate(self, Client, Prompt: str, Model: str) -> str | None:
         if Model == "opera/aria":
@@ -84,7 +76,9 @@ class Image(Cog):
     ) -> None:
         Start = monotonic()
         await Interaction.response.defer()
-        Client = await self._GetClient()
+        from .shared import GetClient
+
+        Client = await GetClient()
 
         Url = await self._Generate(Client, prompt, model)
         if not Url:

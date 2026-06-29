@@ -28,14 +28,6 @@ def _FormatElapsed(Ms: float) -> str:
 class Glm(Cog):
     def __init__(self, Bot: "Bot") -> None:
         self.Bot = Bot
-        self._Client = None
-
-    async def _GetClient(self):
-        if self._Client is None:
-            from fishr import AsyncClient
-
-            self._Client = AsyncClient()
-        return self._Client
 
     @command(
         name="glm",
@@ -56,7 +48,9 @@ class Glm(Cog):
     ) -> None:
         Start = monotonic()
         await Interaction.response.defer()
-        Client = await self._GetClient()
+        from .shared import GetClient
+
+        Client = await GetClient()
 
         Result = await Client.chat.completions.create(
             model=model,
@@ -67,6 +61,10 @@ class Glm(Cog):
         if not Content:
             await Interaction.followup.send(content="glm returned no response :(")
             return
+
+        ContentMaxLen = 4000
+        if len(Content) > ContentMaxLen:
+            Content = Content[:ContentMaxLen] + "..."
 
         Elapsed = _FormatElapsed((monotonic() - Start) * 1000)
         UserMention = Interaction.user.mention if Interaction.user else "Unknown"

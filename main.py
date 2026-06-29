@@ -19,7 +19,7 @@ def DiscoverCogs() -> tuple[str, ...]:
     return tuple(
         f"commands.{File.stem}"
         for File in CogDir.glob("*.py")
-        if not File.stem.startswith("_")
+        if not File.stem.startswith("_") and File.stem != "shared"
     )
 
 
